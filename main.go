@@ -1,12 +1,3 @@
-// originated from https://github.com/zmb3/spotify/blob/master/examples/authenticate/authcode/authenticate.go
-//
-// This example demonstrates how to authenticate with Spotify using the authorization code flow.
-// In order to run this example yourself, you'll need to:
-//
-//  1. Register an application at: https://developer.spotify.com/my-applications/
-//       - Use "http://localhost:8080/callback" as the redirect URI
-//  2. Set the SPOTIFY_ID environment variable to the client ID you got in step 1.
-//  3. Set the SPOTIFY_SECRET environment variable to the client secret from step 1.
 package main
 
 import (
@@ -15,7 +6,6 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
-	"time"
 
 	"github.com/zmb3/spotify"
 )
@@ -50,18 +40,6 @@ func openBrowser(url string) {
 	}
 }
 
-func findBeatStartIndex(progress time.Duration, beats []spotify.Marker) int {
-	// get the progress in seconds to compare with in the beats struct
-	prog := progress.Seconds()
-	for i, m := range beats {
-		if m.Start < prog && prog < m.Start + m.Duration {
-			return i
-		}
-	}
-
-	return -1
-}
-
 func main() {
 	// first start an HTTP server
 	http.HandleFunc("/callback", completeAuth)
@@ -84,55 +62,44 @@ func main() {
 	}
 	fmt.Println("You are logged in as:", user.ID)
 
-	playing, err := client.PlayerCurrentlyPlaying()
-	if err != nil {
-		log.Fatalf("error with getting currently playing: %r", err)
-	}
-	fmt.Printf("You are playing item ID: %s\n", playing.Item.ID)
-
-	//features, err := client.GetAudioFeatures(playing.Item.ID)
+	//playing, err := client.PlayerCurrentlyPlaying()
 	//if err != nil {
-	//  log.Fatalf("error with getting audio features: %r", err)
+	//  log.Fatalf("error with getting currently playing: %r", err)
 	//}
-	//for _, feature := range features {
-	//  d, e := json.Marshal(feature)
-	//  fmt.Printf("data: %s, err: %r\n", string(d), e)
+	//fmt.Printf("You are playing item ID: %s\n", playing.Item.ID)
+
+	//analysis, err := client.GetAudioAnalysis(playing.Item.ID)
+	//if err != nil {
+	//  log.Fatalf("error with getting audio analysis: %r", err)
 	//}
 
-	analysis, err := client.GetAudioAnalysis(playing.Item.ID)
-	if err != nil {
-		log.Fatalf("error with getting audio analysis: %r", err)
-	}
-	//d, _ := json.Marshal(analysis.Beats)
-	//fmt.Printf("analysis of beats: %s\n", string(d))
-
-	playing, err = client.PlayerCurrentlyPlaying()
-	if err != nil {
-		log.Fatalf("error with getting currently playing (the second time): %r", err)
-	}
-	startTime := time.Now()
-	startBeat := findBeatStartIndex(time.Duration(playing.Progress) * time.Millisecond, analysis.Beats)
-	fmt.Printf("progress of song: %dms\n", playing.Progress)
-	fmt.Printf("index of beat we are on: %d\n", startBeat)
+	//playing, err = client.PlayerCurrentlyPlaying()
+	//if err != nil {
+	//  log.Fatalf("error with getting currently playing (the second time): %r", err)
+	//}
+	//startBeat := findBeatStartIndex(time.Duration(playing.Progress)*time.Millisecond, analysis.Beats)
+	//fmt.Printf("progress of song: %dms\n", playing.Progress)
+	//fmt.Printf("index of beat we are on: %d\n", startBeat)
 	fmt.Printf("Let the beat start...")
 
-	//nextBeat := startBeat
-	lastTime := startTime
-	totalProgress := time.Duration(playing.Progress) * time.Millisecond
-	// we need to operate on the following data for each loop
-	// TODO: note down what variables are needed for each iteration
-	for {
-		beatIndex := findBeatStartIndex(totalProgress, analysis.Beats)
-		fmt.Printf("beat: %d\n", beatIndex)
-		durationOfBeat := analysis.Beats[beatIndex].Duration
-		fmt.Printf("--> %fs\n", durationOfBeat)
-		time.Sleep(time.Duration(durationOfBeat * 1000000000))
-		totalProgress = totalProgress + time.Since(lastTime)
-		lastTime = time.Now()
+	//startTime := time.Now()
+	//ls := &LoopStorage{
+	//  Beats:            analysis.Beats,
+	//  CurrentlyPlaying: playing,
+	//  LastBeatIndex:    -1,
+	//  LastUpdateTime:   startTime,
+	//  StartTime:        startTime,
+	//  TotalProgress:    time.Duration(playing.Progress) * time.Millisecond,
+	//}
 
-		// TODO: every N beats, or more likely every 10 seconds, we should make
-		// sure that we're still setting the beats for the correct song
+	loopError := make(chan error)
+	ls := &LoopStorage {
+		Client: client,
 	}
+
+	go startLoop(ls, loopError)
+
+	<-loopError
 }
 
 func completeAuth(w http.ResponseWriter, r *http.Request) {
